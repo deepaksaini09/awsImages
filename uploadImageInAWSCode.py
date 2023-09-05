@@ -77,8 +77,8 @@ class ImageCompressor:
 
 
 if __name__ == "__main__":
-    access_key = "AKIA27NOFMVOLPRAAZXQ"  # Access Key
-    secret_key = "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"  # Secret key
+    access_key = "access key"  # Access Key
+    secret_key = "secret key"  # Secret key
     # taking bucket name from user
     bucket_name = sys.argv[1]
     # bucket_name = "moviesgarhs"  # bucket name
