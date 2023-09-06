@@ -4,6 +4,7 @@ from botocore.exceptions import NoCredentialsError
 from PIL import Image
 import logging
 import sys
+
 # Configure the logger
 logging.basicConfig(
     filename='imagesInfo.log',  # Name of the log file
@@ -68,9 +69,10 @@ class ImageCompressor:
 
                         # Upload the compressed image to S3
                         self.uploadToS3(outputPath, s3_path)
-                        logging.info('processImages: successfully insert image '+str(filename))
+                        logging.info('processImages: successfully insert image ' + str(filename))
                     else:
-                        logging.critical('processImages: Image Type is different and image details is :' + str(filename))
+                        logging.critical(
+                            'processImages: Image Type is different and image details is :' + str(filename))
                 except Exception as error:
                     logging.error('processImages: error in uploading image', str(filename))
                     print(error)
@@ -80,14 +82,17 @@ if __name__ == "__main__":
     access_key = "access key"  # Access Key
     secret_key = "secret key"  # Secret key
     # taking bucket name from user
-    bucket_name = sys.argv[1]
-    # bucket_name = "moviesgarhs"  # bucket name
+    if len(sys.argv) > 1:
+        bucket_name = sys.argv[1]
+        # bucket_name = "moviesgarhs"  # bucket name
 
-    # Specify the directory containing images
-    source_directory = "directoryImages"
+        # Specify the directory containing images
+        source_directory = "directoryImages"
 
-    # Create an instance of the ImageCompressor class
-    compressor = ImageCompressor(access_key, secret_key, bucket_name)
+        # Create an instance of the ImageCompressor class
+        compressor = ImageCompressor(access_key, secret_key, bucket_name)
 
-    # Process and upload images to S3
-    compressor.processImages(source_directory)
+        # Process and upload images to S3
+        compressor.processImages(source_directory)
+    else:
+        print("Please provide S3 bucket Name while running this script")
