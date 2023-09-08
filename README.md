@@ -8,4 +8,4 @@
          --   python3 uploadImageInAWSCode.py 'your s3 bucket name'
 ## awsImages
 ## main code is in uploadImageInAWSCode.py
-## i have added log file in which we can see status of image
+## i have added log file in which we can see status of images
