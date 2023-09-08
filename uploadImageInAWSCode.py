@@ -76,7 +76,7 @@ if __name__ == "__main__":
     s3_bucket_name = None
     if len(sys.argv) > 1:
         s3_bucket_name = sys.argv[1]
-        directoryInsideS3Bucket = "directoryName"
+        directoryInsideS3Bucket = "your directoryName"
         s3_directory_path = f'{s3_bucket_name}/{directoryInsideS3Bucket}'  # Replace with the path to your input directory
         output_directory_path = f'{s3_bucket_name}/{directoryInsideS3Bucket}'  # Replace with the path to your output directory
         # in output_directory_path you can store in another directory for this you have change directory name for output
