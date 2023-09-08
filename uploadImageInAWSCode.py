@@ -1,98 +1,91 @@
 import os
-import boto3
-from botocore.exceptions import NoCredentialsError
-from PIL import Image
-import logging
 import sys
 
-# Configure the logger
-logging.basicConfig(
-    filename='imagesInfo.log',  # Name of the log file
-    level=logging.DEBUG,  # Log level (e.g., INFO, DEBUG, WARNING, ERROR)
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+import boto3
+from PIL import Image
+from io import BytesIO
+import logging
 
 
-class ImageCompressor:
-    def __init__(self, accessKey, secretKey, bucketName):
-        self.accessKey = accessKey
-        self.secretKey = secretKey
-        self.bucketName = bucketName
+class S3ImageCompressor:
+    def __init__(self, awsAccessKey, awsSecretKey, s3BucketName, inputDirectory, outputDirectory):
+        self.awsAccessKey = awsAccessKey
+        self.awsSecretKey = awsSecretKey
+        self.s3BucketName = s3BucketName
+        self.inputDirectory = inputDirectory
+        self.outputDirectory = outputDirectory
 
-        # Configure AWS credentials
-        boto3.setup_default_session(aws_access_key_id=access_key, aws_secret_access_key=secret_key)
-        self.s3 = boto3.client('s3')
+        # Initialize the S3 client
+        self.s3_client = boto3.client('s3', aws_access_key_id=awsAccessKey, aws_secret_access_key=awsSecretKey)
 
-    def compressImage(self, inputFle, outputFile, quality=95):
+    @staticmethod
+    def compressImage(imagePath):
         """
-        Compresses an image using Pillow while maintaining quality.
+                Compresses an image using Pillow while maintaining quality.
         """
         try:
-            img = Image.open(inputFle)
-            img.save(outputFile, format=img.format, quality=quality)
+            with Image.open(imagePath) as img:
+                # Save the compressed image to a temporary buffer
+                buffer = BytesIO()
+                img.save(buffer, format=img.format, optimize=True,
+                         quality=95)  # You can adjust the format and quality as needed
+                return buffer.getvalue()
         except Exception as e:
-            errorType = f"compressImage: Error compressing {inputFle}: {e}"
-            print(f"compressImage: Error compressing {inputFle}: {e}")
-            logging.error(errorType)
+            errorType = f"Error compressing {imagePath}: {str(e)}"
+            print(errorType)
+            logging.error(f"compressImage: {errorType}")
+            return None
 
-    def uploadToS3(self, localPath, s3Path):
+    def processS3Directory(self):
         """
-        Uploads a file to an AWS S3 bucket.
+                Traverses a directory, compresses image files, and uploads them to S3.
         """
         try:
-            self.s3.upload_file(localPath, self.bucketName, s3Path)
-        except NoCredentialsError:
-            errorType = 'uploadToS3: AWS credentials not found. Please configure your AWS credentials.'
-            print("uploadToS3: AWS credentials not found. Please configure your AWS credentials.")
-            logging.error(errorType)
+            response = self.s3_client.list_objects_v2(Bucket=self.s3BucketName, Prefix=self.inputDirectory)
 
-    def processImages(self, directory):
-        """
-        Traverses a directory, compresses image files, and uploads them to S3.
-        """
-        for root, _, files in os.walk(directory):
-            for filename in files:
-                try:
-                    if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        inputPath = os.path.join(root, filename)
-                        relativePath = os.path.relpath(inputPath, directory)
-                        outputPath = f"compressed/{relativePath}"
+            for obj in response.get('Contents', []):
+                key = obj['Key']
+                if key.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    # Download the image from S3
+                    s3_object = self.s3_client.get_object(Bucket=self.s3BucketName, Key=key)
+                    image_data = s3_object['Body'].read()
 
-                        # Create the compressed folder structure in S3
-                        s3_path = f"{self.bucketName}/{outputPath}"
+                    # Compress the image
+                    compressed_image_data = self.compressImage(BytesIO(image_data))
 
-                        # Create the local directory for compressed images
-                        # os.makedirs(os.path.dirname(outputPath), exist_ok=True)
+                    if compressed_image_data:
+                        # Upload the compressed image to the output directory within S3
+                        output_key = key.replace(self.inputDirectory, self.outputDirectory)
+                        self.s3_client.put_object(Bucket=self.s3BucketName, Key=output_key,
+                                                  Body=compressed_image_data)
 
-                        # Compress the image
-                        self.compressImage(inputPath, outputPath)
-
-                        # Upload the compressed image to S3
-                        self.uploadToS3(outputPath, s3_path)
-                        logging.info('processImages: successfully insert image ' + str(filename))
+                        print(f"Compressed and uploaded: {output_key}")
                     else:
-                        logging.critical(
-                            'processImages: Image Type is different and image details is :' + str(filename))
-                except Exception as error:
-                    logging.error('processImages: error in uploading image', str(filename))
-                    print(error)
+                        logging.error(f"processS3Directory: not uploaded this {self.inputDirectory} images")
+
+        except Exception as e:
+            errorType = f"Error processing S3 directory: {str(e)}"
+            print(f"Error processing S3 directory: {str(e)}")
+            logging.error(f"processS3Directory: {errorType}")
 
 
 if __name__ == "__main__":
-    access_key = "access key"  # Access Key
-    secret_key = "secret key"  # Secret key
-    # taking bucket name from user
+    aws_access_key = 'AWS Access Key'
+    aws_secret_key = 'AWS Secret key'
+    # s3_bucket_name = 'moviesgarhs'
+    s3_bucket_name = None
     if len(sys.argv) > 1:
-        bucket_name = sys.argv[1]
-        # bucket_name = "moviesgarhs"  # bucket name
+        s3_bucket_name = sys.argv[1]
+        directoryInsideS3Bucket = "directoryName"
+        s3_directory_path = f'{s3_bucket_name}/{directoryInsideS3Bucket}'  # Replace with the path to your input directory
+        output_directory_path = f'{s3_bucket_name}/{directoryInsideS3Bucket}'  # Replace with the path to your output directory
+        # in output_directory_path you can store in another directory for this you have change directory name for output
 
-        # Specify the directory containing images
-        source_directory = "directoryImages"
+        # Create an instance of the S3ImageCompressor class
+        image_compressor = S3ImageCompressor(aws_access_key, aws_secret_key, s3_bucket_name, s3_directory_path,
+                                             output_directory_path)
 
-        # Create an instance of the ImageCompressor class
-        compressor = ImageCompressor(access_key, secret_key, bucket_name)
-
-        # Process and upload images to S3
-        compressor.processImages(source_directory)
+        # Call the process_s3_directory method to process images in the S3 directory
+        image_compressor.processS3Directory()
     else:
-        print("Please provide S3 bucket Name while running this script")
+        print("Please Enter S3 Bucket Name")
